@@ -5,7 +5,6 @@ import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, on
 
 // =====================================================================
 // 請在此處貼上您的 Firebase 專案配置！
-// 您可以在 Firebase Console (console.firebase.google.com)
 // 選擇您的專案 -> 專案設定 -> 一般 -> 您的應用程式，找到這個配置物件。
 // =====================================================================
 const firebaseConfig = {
