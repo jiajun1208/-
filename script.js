@@ -5,6 +5,7 @@ import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, on
 
 // =====================================================================
 // 請在此處貼上您的 Firebase 專案配置！
+// 您可以在 Firebase Console (console.firebase.google.com)
 // 選擇您的專案 -> 專案設定 -> 一般 -> 您的應用程式，找到這個配置物件。
 // =====================================================================
 const firebaseConfig = {
@@ -21,7 +22,7 @@ const firebaseConfig = {
 // Firebase 服務實例將儲存在這些模組作用域變數中
 let firestoreDb = null;
 let firebaseAuth = null;
-let firebaseAppInstance = null; // 新增：用於儲存 Firebase app 實例
+let firebaseAppInstance = null; // 用於儲存 Firebase app 實例
 let currentAppId = null; // 從 firebaseConfig.projectId 獲取
 
 // 應用程式狀態變數 (模組作用域)
@@ -86,13 +87,13 @@ let allIngredients = []; // 儲存所有藥材名稱，用於自動完成
 async function initializeFirebase() {
     // 檢查 Firebase 配置是否已填寫
     if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY" || !firebaseConfig.projectId || firebaseConfig.projectId === "YOUR_PROJECT_ID") {
-        console.error("Firebase configuration is missing or incomplete. Please update firebaseConfig.");
-        await showCustomMessageBox("錯誤", "Firebase 配置不完整。請編輯 script.js 檔案並填入您的 Firebase 專案資訊。");
+        console.error("Firebase configuration is missing or incomplete. Please update firebaseConfig in script.js.");
+        await showCustomMessageBox("錯誤", "Firebase 配置不完整。請編輯 script.js 檔案並填入您的 Firebase 專案資訊。詳情請查看瀏覽器控制台。");
         hideLoadingSpinner();
         // 啟用本地儲存作為備用
         firestoreDb = null;
         firebaseAuth = null;
-        firebaseAppInstance = null; // 確保這個變數在錯誤時也為 null
+        firebaseAppInstance = null;
         userId = crypto.randomUUID(); // 生成一個本地使用者 ID
         userInfoElem.textContent = `匿名使用者 ID: ${userId} (無 Firebase 連線)`;
         showManageBtn.classList.add('hidden'); // 無法管理題目
@@ -104,59 +105,81 @@ async function initializeFirebase() {
         return;
     }
 
-    firebaseAppInstance = initializeApp(firebaseConfig); // 將 Firebase app 實例賦值給模組級變數
-    firebaseAuth = getAuth(firebaseAppInstance); // 使用模組級變數
-    firestoreDb = getFirestore(firebaseAppInstance); // 使用模組級變數
-    currentAppId = firebaseConfig.projectId; // 將專案 ID 儲存到模組作用域變數
+    try {
+        firebaseAppInstance = initializeApp(firebaseConfig); // 將 Firebase app 實例賦值給模組級變數
+        firebaseAuth = getAuth(firebaseAppInstance); // 使用模組級變數
+        firestoreDb = getFirestore(firebaseAppInstance); // 使用模組級變數
+        currentAppId = firebaseConfig.projectId; // 將專案 ID 儲存到模組作用域變數
 
-    // 監聽認證狀態變化
-    onAuthStateChanged(firebaseAuth, async (user) => {
-        if (user) {
-            userId = user.uid;
-            userInfoElem.textContent = `使用者 ID: ${userId}`;
-            showManageBtn.classList.remove('hidden'); // 登入後顯示管理按鈕
-            authReady = true;
-            // 在認證準備就緒後啟動 Firestore 監聽器
-            listenToFormulas();
-            listenToMistakeRecords();
-        } else {
-            // 如果沒有用戶登錄，嘗試匿名登錄
-            try {
-                await signInAnonymously(firebaseAuth); // GitHub Pages 預設使用匿名登入
-                userId = firebaseAuth.currentUser?.uid || crypto.randomUUID(); // Fallback in case uid is null
-                userInfoElem.textContent = `使用者 ID: ${userId} (匿名)`;
-                showManageBtn.classList.remove('hidden'); // 匿名登入也顯示管理按鈕
+        // 監聽認證狀態變化
+        onAuthStateChanged(firebaseAuth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                userInfoElem.textContent = `使用者 ID: ${userId}`;
+                showManageBtn.classList.remove('hidden'); // 登入後顯示管理按鈕
                 authReady = true;
+                console.log(`Firebase 認證成功。使用者 ID: ${userId}`);
+                // 在認證準備就緒後啟動 Firestore 監聽器
                 listenToFormulas();
                 listenToMistakeRecords();
-            } catch (error) {
-                console.error("Firebase authentication failed:", error);
-                userId = crypto.randomUUID(); // Fallback to a random ID if auth fails
-                userInfoElem.textContent = `匿名使用者 ID: ${userId} (登入失敗)`;
-                showManageBtn.classList.add('hidden'); // 登入失敗則隱藏管理按鈕
-                authReady = true; // 即使失敗也標記為準備就緒，讓應用程式繼續
-                // 如果認證失敗，還是需要嘗試載入題目 (可能沒有權限)
-                listenToFormulas();
-                await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
+            } else {
+                // 如果沒有用戶登錄，嘗試匿名登錄
+                try {
+                    await signInAnonymously(firebaseAuth); // GitHub Pages 預設使用匿名登入
+                    userId = firebaseAuth.currentUser?.uid || crypto.randomUUID(); // Fallback in case uid is null
+                    userInfoElem.textContent = `使用者 ID: ${userId} (匿名)`;
+                    showManageBtn.classList.remove('hidden'); // 匿名登入也顯示管理按鈕
+                    authReady = true;
+                    console.log(`Firebase 匿名認證成功。使用者 ID: ${userId}`);
+                    listenToFormulas();
+                    listenToMistakeRecords();
+                } catch (error) {
+                    console.error("Firebase authentication failed:", error);
+                    userId = crypto.randomUUID(); // Fallback to a random ID if auth fails
+                    userInfoElem.textContent = `匿名使用者 ID: ${userId} (登入失敗)`;
+                    showManageBtn.classList.add('hidden'); // 登入失敗則隱藏管理按鈕
+                    authReady = true; // 即使失敗也標記為準備就緒，讓應用程式繼續
+                    // 如果認證失敗，還是需要嘗試載入題目 (可能沒有權限)
+                    listenToFormulas();
+                    await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
+                }
             }
-        }
+            hideLoadingSpinner();
+            // 確保在認證準備就緒後顯示初始頁面
+            showSection(quizSection);
+            displayQuestion();
+        });
+    } catch (error) {
+        // 捕獲 initializeApp 失敗的錯誤
+        console.error("Firebase App 初始化失敗:", error);
+        await showCustomMessageBox("初始化錯誤", `Firebase App 初始化失敗：${error.message || error}。請檢查您的 Firebase 配置是否正確。詳情請查看瀏覽器控制台。`);
         hideLoadingSpinner();
-        // 確保在認證準備就緒後顯示初始頁面
+        // 在 Firebase 初始化失敗時，回退到 localStorage
+        firestoreDb = null;
+        firebaseAuth = null;
+        firebaseAppInstance = null;
+        userId = crypto.randomUUID();
+        userInfoElem.textContent = `匿名使用者 ID: ${userId} (無 Firebase 連線)`;
+        showManageBtn.classList.add('hidden');
+        authReady = true;
+        formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]');
+        loadMistakeRecordsLocal();
         showSection(quizSection);
         displayQuestion();
-    });
+    }
 }
 
 // --- Firestore 數據監聽 ---
 function listenToFormulas() {
     if (!firestoreDb || !authReady) {
-        console.warn("Firestore not ready for formulas listener.");
+        console.warn("Firestore not ready for formulas listener. Data will not be loaded from cloud.");
         // 如果載入失敗，顯示沒有題目的訊息
         if (formulas.length === 0) {
             noFormulasMessage.classList.remove('hidden');
         }
         return;
     }
+    console.log(`嘗試監聽題目 (formulas) 路徑: artifacts/${currentAppId}/public/data/formulas`);
     const formulasColRef = collection(firestoreDb, `artifacts/${currentAppId}/public/data/formulas`);
     onSnapshot(formulasColRef, (snapshot) => {
         formulas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -170,7 +193,11 @@ function listenToFormulas() {
         renderManagedFormulas(); // 重新渲染管理列表
     }, (error) => {
         console.error("Error listening to formulas:", error);
-        showCustomMessageBox("錯誤", "無法載入題目，請檢查網路連線。");
+        if (error.code === 'permission-denied') {
+            showCustomMessageBox("錯誤", "載入題目失敗：權限不足。請檢查您的 Firestore 安全規則，確保允許讀取公共題目。");
+        } else {
+            showCustomMessageBox("錯誤", "無法載入題目，請檢查網路連線。");
+        }
         // 如果載入失敗，顯示沒有題目的訊息
         if (formulas.length === 0) {
              noFormulasMessage.classList.remove('hidden');
@@ -180,10 +207,12 @@ function listenToFormulas() {
 
 function listenToMistakeRecords() {
     if (!firestoreDb || !authReady || userId === 'anonymous') {
-        console.warn("Firestore or user not ready for mistake records listener. Falling back to LocalStorage.");
+        console.warn("Firestore 或使用者未準備就緒，無法監聽錯題記錄。回退到 LocalStorage。");
         loadMistakeRecordsLocal(); // 回退到 localStorage
         return;
     }
+    // 在這裡列印出要監聽的具體 Firestore 路徑
+    console.log(`嘗試監聽錯題記錄 (mistakeRecords) 路徑: artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
     const mistakeRecordsColRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
     onSnapshot(mistakeRecordsColRef, (snapshot) => {
         mistakeRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -195,7 +224,12 @@ function listenToMistakeRecords() {
         }
     }, (error) => {
         console.error("Error listening to mistake records:", error);
-        showCustomMessageBox("錯誤", "無法載入錯題記錄，請檢查網路連線。");
+        // 如果是權限問題，會顯示特定錯誤碼
+        if (error.code === 'permission-denied') {
+            showCustomMessageBox("錯誤", "載入錯題記錄失敗：權限不足。請檢查您的 Firestore 安全規則，確保允許讀寫您的私人錯題記錄。");
+        } else {
+            showCustomMessageBox("錯誤", "無法載入錯題記錄，請檢查網路連線。");
+        }
     });
 }
 
@@ -459,7 +493,7 @@ async function addMistake(formulaName, userAnswer, correctAnswer) {
             record.correctAnswer === correctAnswer
         );
         if (!exists) {
-            // 為本地記錄生成一個臨時 ID
+            // 為本地記錄生成一個臨時 ID，確保更唯一
             mistakeRecords.push({ ...newRecord, id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` });
             saveMistakeRecordsLocal();
             console.log("Mistake added to LocalStorage.");
@@ -628,6 +662,7 @@ function openFormulaModal(formulaId = null) {
         }
     } else {
         modalTitle.textContent = "新增方劑";
+        formulaModal.dataset.editId = ''; // 確保新增模式下沒有編輯 ID
     }
     formulaModal.classList.remove('hidden');
 }
@@ -656,7 +691,7 @@ formulaForm.addEventListener('submit', async (event) => {
     }
 
     const formulaData = { name, ingredients, hint };
-    const editId = formulaModal.dataset.editId;
+    const editId = formulaModal.dataset.editId; // 從 data-edit-id 獲取編輯 ID
 
     if (firestoreDb && authReady && currentAppId) {
         try {
@@ -672,18 +707,22 @@ formulaForm.addEventListener('submit', async (event) => {
             closeFormulaModal();
         } catch (e) {
             console.error("儲存方劑失敗:", e);
-            await showCustomMessageBox("錯誤", "儲存方劑失敗，請檢查網路連線或權限。");
+            await showCustomMessageBox("錯誤", "儲存方劑失敗，請檢查網路連線或 Firestore 規則。");
         }
     } else {
         // 如果沒有 Firebase 或認證未準備就緒，回退到 localStorage 處理
         if (editId) {
+            // 編輯本地現有方劑
             const index = formulas.findIndex(f => f.id === editId);
             if (index !== -1) {
                 formulas[index] = { ...formulaData, id: editId };
                 await showCustomMessageBox("成功", "方劑已在本地更新！");
+            } else {
+                 await showCustomMessageBox("錯誤", "本地編輯失敗：找不到要編輯的方劑。");
             }
         } else {
-            formulas.push({ ...formulaData, id: `local-${Date.now()}` }); // 為本地新增的賦予一個臨時 ID
+            // 新增本地方劑，生成更唯一的 ID
+            formulas.push({ ...formulaData, id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` });
             await showCustomMessageBox("成功", "新方劑已在本地新增！");
         }
         localStorage.setItem('localFormulas', JSON.stringify(formulas)); // 儲存到本地
@@ -714,7 +753,7 @@ async function deleteFormula(formulaId) {
                 await showCustomMessageBox("成功", "方劑刪除成功！");
             } catch (e) {
                 console.error("刪除方劑失敗:", e);
-                await showCustomMessageBox("錯誤", "刪除方劑失敗，請檢查網路連線或權限。");
+                await showCustomMessageBox("錯誤", "刪除方劑失敗，請檢查網路連線或 Firestore 規則。");
             }
         } else {
             // 回退到 localStorage 刪除
@@ -724,6 +763,8 @@ async function deleteFormula(formulaId) {
                 localStorage.setItem('localFormulas', JSON.stringify(formulas));
                 await showCustomMessageBox("成功", "方劑已從本地刪除！");
                 renderManagedFormulas();
+            } else {
+                await showCustomMessageBox("錯誤", "本地刪除失敗：找不到要刪除的方劑。");
             }
         }
     }
