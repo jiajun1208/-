@@ -1,0 +1,25 @@
+/* 設定基本字體和背景色 */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f0f4f8; /* 淺灰色背景 */
+}
+/* 自定義滾動條樣式，使其更美觀 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+/* 必要時強制換行，處理長文字 */
+.break-words {
+    word-break: break-word;
+}
