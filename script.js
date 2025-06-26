@@ -1,28 +1,31 @@
-// 導入 Firebase 模組
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// 導入 Firebase 模組 (使用完整的 CDN URL)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// =====================================================================
+// 請在此處貼上您的 Firebase 專案配置！
+// 您可以在 Firebase Console (console.firebase.google.com)
+// 選擇您的專案 -> 專案設定 -> 一般 -> 您的應用程式，找到這個配置物件。
+// =====================================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyCZSC4KP9r9Ia74gjhVM4hkhkCiXU6ltR4",
-  authDomain: "avny-ccbe9.firebaseapp.com",
-  databaseURL: "https://avny-ccbe9-default-rtdb.firebaseio.com",
-  projectId: "avny-ccbe9",
-  storageBucket: "avny-ccbe9.firebasestorage.app",
-  messagingSenderId: "686829295344",
-  appId: "1:686829295344:web:8fe4ce8aa6644e41701435",
-  measurementId: "G-G19JF36EW4"
+  apiKey: "AIzaSyCZSC4KP9r9Ia74gjhVM4hkhkCiXU6ltR4", // <--- 請替換為您的 API Key
+  authDomain: "avny-ccbe9.firebaseapp.com", // <--- 請替換為您的專案 ID (通常與 projectId 相關)
+  projectId: "avny-ccbe9", // <--- 請替換為您的專案 ID
+  storageBucket: "avny-ccbe9.firebasestorage.app", // <--- 請替換為您的專案 ID
+  messagingSenderId: "686829295344", // <--- 請替換為您的發送者 ID
+  appId: "1:686829295344:web:aa65fcfc89f15660701435" // <--- 請替換為您的應用程式 ID
 };
 // =====================================================================
-// Firebase 應用程式和服務實例
-let app;
-let db;
-let auth;
-let userId = 'anonymous'; // 預設為匿名使用者 ID
+
+
+// Firebase 服務實例將儲存在這些模組作用域變數中
+let firestoreDb = null;
+let firebaseAuth = null;
+let currentAppId = null; // 從 firebaseConfig.projectId 獲取
+
+// 應用程式狀態變數 (模組作用域)
+let userId = 'anonymous'; // 當前使用者 ID
 let authReady = false; // 標誌，表示 Firebase 認證是否準備就緒
 
 // --- DOM 元素獲取 ---
