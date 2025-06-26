@@ -28,11 +28,13 @@ let currentAppId = null; // 從 firebaseConfig.projectId 獲取
 // 應用程式狀態變數 (模組作用域)
 let userId = 'anonymous'; // 當前使用者 ID
 let authReady = false; // 標誌，表示 Firebase 認證是否準備就緒
+let currentFormulaIntroCategoryFilter = '全部'; // 用於方劑介紹區的當前篩選類別
 
 // --- DOM 元素獲取 ---
 const userInfoElem = document.getElementById('user-info');
 const showQuizBtn = document.getElementById('show-quiz-btn');
-const showCategoryChallengeBtn = document.getElementById('show-category-challenge-btn'); // 新增
+const showCategoryChallengeBtn = document.getElementById('show-category-challenge-btn');
+const showFormulaIntroBtn = document.getElementById('show-formula-intro-btn'); // 新增
 const showMistakesBtn = document.getElementById('show-mistakes-btn');
 const showManageBtn = document.getElementById('show-manage-btn');
 const loadingSpinner = document.getElementById('loading-spinner');
@@ -50,16 +52,25 @@ const autocompleteResults = document.getElementById('autocomplete-results');
 const noFormulasMessage = document.getElementById('no-formulas-message');
 
 // Category Challenge Section elements (藥劑分類大挑戰)
-const categoryChallengeSection = document.getElementById('category-challenge-section'); // 新增
-const categoryFormulaNameElem = document.getElementById('category-formula-name'); // 新增
-const categoryChallengeHintElem = document.getElementById('category-challenge-hint'); // 新增
-const userCategoryAnswerInput = document.getElementById('user-category-answer'); // 新增
-const submitCategoryAnswerBtn = document.getElementById('submit-category-answer-btn'); // 新增
-const showCorrectCategoryAnswerBtn = document.getElementById('show-correct-category-answer-btn'); // 新增
-const nextCategoryQuestionBtn = document.getElementById('next-category-question-btn'); // 新增
-const categoryFeedbackMessageElem = document.getElementById('category-feedback-message'); // 新增
-const categoryAutocompleteResults = document.getElementById('category-autocomplete-results'); // 新增
-const noCategoryFormulasMessage = document.getElementById('no-category-formulas-message'); // 新增
+const categoryChallengeSection = document.getElementById('category-challenge-section');
+const categoryFormulaNameElem = document.getElementById('category-formula-name');
+const categoryChallengeHintElem = document.getElementById('category-challenge-hint');
+const userCategoryAnswerInput = document.getElementById('user-category-answer');
+const submitCategoryAnswerBtn = document.getElementById('submit-category-answer-btn');
+const showCorrectCategoryAnswerBtn = document.getElementById('show-correct-category-answer-btn');
+const nextCategoryQuestionBtn = document.getElementById('next-category-question-btn');
+const categoryFeedbackMessageElem = document.getElementById('category-feedback-message');
+const categoryAutocompleteResults = document.getElementById('category-autocomplete-results');
+const noCategoryFormulasMessage = document.getElementById('no-category-formulas-message');
+
+// Formula Introduction Section elements (方劑卡片介紹區)
+const formulaIntroSection = document.getElementById('formula-intro-section'); // 新增
+const categoryFilterContainer = document.getElementById('category-filter-container'); // 新增
+const introSearchInput = document.getElementById('intro-search-input'); // 新增
+const addFormulaIntroBtnTop = document.getElementById('add-formula-intro-btn-top'); // 新增
+const formulaIntroductionsList = document.getElementById('formula-introductions-list'); // 新增
+const noIntroductionsMessage = document.getElementById('no-introductions-message'); // 新增
+
 
 // Mistakes Section elements
 const mistakesSection = document.getElementById('mistakes-section');
@@ -88,13 +99,26 @@ const formulaHintInput = document.getElementById('formula-hint-input');
 const cancelFormulaBtn = document.getElementById('cancel-formula-btn');
 
 // Category Modal elements (藥劑分類題目彈窗)
-const categoryModal = document.getElementById('category-modal'); // 新增
-const categoryModalTitle = document.getElementById('category-modal-title'); // 新增
-const categoryForm = document.getElementById('category-form'); // 新增
-const categoryFormulaNameInput = document.getElementById('category-formula-name-input'); // 新增
-const categoryAnswerInput = document.getElementById('category-answer-input'); // 新增
-const categoryHintInput = document.getElementById('category-hint-input'); // 新增
-const cancelCategoryBtn = document.getElementById('cancel-category-btn'); // 新增
+const categoryModal = document.getElementById('category-modal');
+const categoryModalTitle = document.getElementById('category-modal-title');
+const categoryForm = document.getElementById('category-form');
+const categoryFormulaNameInput = document.getElementById('category-formula-name-input');
+const categoryAnswerInput = document.getElementById('category-answer-input');
+const categoryHintInput = document.getElementById('category-hint-input');
+const cancelCategoryBtn = document.getElementById('cancel-category-btn');
+
+// Formula Intro Modal elements (方劑介紹彈窗)
+const formulaIntroModal = document.getElementById('formula-intro-modal'); // 新增
+const formulaIntroModalTitle = document.getElementById('formula-intro-modal-title'); // 新增
+const formulaIntroForm = document.getElementById('formula-intro-form'); // 新增
+const introFormulaNameInput = document.getElementById('intro-formula-name-input'); // 新增
+const introCategoryInput = document.getElementById('intro-category-input'); // 新增
+const introCategoryAutocompleteResults = document.getElementById('intro-category-autocomplete-results'); // 新增
+const introIngredientsInput = document.getElementById('intro-ingredients-input'); // 新增
+const introIndicationsInput = document.getElementById('intro-indications-input'); // 新增
+const introEffectsInput = document.getElementById('intro-effects-input'); // 新增
+const cancelIntroBtn = document.getElementById('cancel-intro-btn'); // 新增
+
 
 // Custom Message Box elements
 const customMessageBox = document.getElementById('custom-message-box');
@@ -111,9 +135,10 @@ let mistakeRecords = []; // 儲存錯題記錄 (包含兩種遊戲的錯題)
 
 let formulas = []; // 儲存藥材組成挑戰的方劑列表
 let categoryChallenges = []; // 儲存藥劑分類挑戰的方劑列表及分類
+let formulaIntroductions = []; // 新增：儲存方劑介紹資料
 
 let allIngredients = []; // 儲存所有藥材名稱，用於藥材組成挑戰的自動完成
-let allCategories = []; // 儲存所有分類名稱，用於藥劑分類挑戰的自動完成
+let allCategories = []; // 儲存所有分類名稱，用於所有分類相關自動完成和篩選
 
 
 // --- Firebase 初始化 ---
@@ -133,9 +158,14 @@ async function initializeFirebase() {
         authReady = true;
         formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]'); // 從 localStorage 載入本地題目
         categoryChallenges = JSON.parse(localStorage.getItem('localCategoryChallenges') || '[]'); // 從 localStorage 載入本地分類題目
+        formulaIntroductions = JSON.parse(localStorage.getItem('localFormulaIntroductions') || '[]'); // 新增：從 localStorage 載入本地介紹資料
         loadMistakeRecordsLocal(); // 從 localStorage 載入錯題記錄
+        initializeAllCategories(); // 在本地模式下也要初始化分類
+        initializeAllIngredients(); // 在本地模式下也要初始化藥材
         showSection(quizSection); // 預設顯示藥材組成挑戰
         displayQuestion();
+        renderFormulaCategoriesFilter(); // 渲染分類篩選按鈕
+        renderFormulaIntroductions(); // 渲染介紹卡片
         return;
     }
 
@@ -155,7 +185,8 @@ async function initializeFirebase() {
                 console.log(`Firebase 認證成功。使用者 ID: ${userId}`);
                 // 在認證準備就緒後啟動 Firestore 監聽器
                 listenToFormulas();
-                listenToCategoryChallenges(); // 新增監聽器
+                listenToCategoryChallenges();
+                listenToFormulaIntroductions(); // 新增監聽器
                 listenToMistakeRecords();
             } else {
                 // 如果沒有用戶登錄，嘗試匿名登錄
@@ -167,7 +198,8 @@ async function initializeFirebase() {
                     authReady = true;
                     console.log(`Firebase 匿名認證成功。使用者 ID: ${userId}`);
                     listenToFormulas();
-                    listenToCategoryChallenges(); // 新增監聽器
+                    listenToCategoryChallenges();
+                    listenToFormulaIntroductions(); // 新增監聽器
                     listenToMistakeRecords();
                 } catch (error) {
                     console.error("Firebase authentication failed:", error);
@@ -177,8 +209,8 @@ async function initializeFirebase() {
                     authReady = true; // 即使失敗也標記為準備就緒，讓應用程式繼續
                     // 如果認證失敗，還是需要嘗試載入題目 (可能沒有權限)
                     listenToFormulas();
-                    listenToCategoryChallenges(); // 即使認證失敗也嘗試載入分類題目
-                    await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
+                    listenToCategoryChallenges();
+                    listenToFormulaIntroductions();
                 }
             }
             hideLoadingSpinner();
@@ -201,9 +233,14 @@ async function initializeFirebase() {
         authReady = true;
         formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]');
         categoryChallenges = JSON.parse(localStorage.getItem('localCategoryChallenges') || '[]');
+        formulaIntroductions = JSON.parse(localStorage.getItem('localFormulaIntroductions') || '[]'); // 新增
         loadMistakeRecordsLocal();
+        initializeAllCategories(); // 在本地模式下也要初始化分類
+        initializeAllIngredients(); // 在本地模式下也要初始化藥材
         showSection(quizSection);
         displayQuestion();
+        renderFormulaCategoriesFilter(); // 渲染分類篩選按鈕
+        renderFormulaIntroductions(); // 渲染介紹卡片
     }
 }
 
@@ -222,12 +259,13 @@ function listenToFormulas() {
         formulas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log("Formulas loaded from Firestore:", formulas);
         initializeAllIngredients(); // 更新自動完成列表
+        initializeAllCategories(); // 因為分類也可能來自藥材組成題目
         if (quizSection.classList.contains('hidden')) {
              // 如果不在藥材組成挑戰頁面，不需要重新顯示問題
         } else {
             displayQuestion(); // 如果在藥材組成挑戰頁面，重新顯示問題
         }
-        renderManagedFormulas(); // 重新渲染管理列表 (不帶搜尋條件)
+        renderManagedFormulas(formulaSearchInput.value); // 重新渲染管理列表 (帶搜尋條件)
     }, (error) => {
         console.error("Error listening to formulas:", error);
         if (error.code === 'permission-denied') {
@@ -241,7 +279,7 @@ function listenToFormulas() {
     });
 }
 
-function listenToCategoryChallenges() { // 新增監聽器
+function listenToCategoryChallenges() {
     if (!firestoreDb || !authReady) {
         console.warn("Firestore not ready for category challenges listener. Data will not be loaded from cloud.");
         if (categoryChallenges.length === 0) {
@@ -254,13 +292,14 @@ function listenToCategoryChallenges() { // 新增監聽器
     onSnapshot(categoryColRef, (snapshot) => {
         categoryChallenges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log("Category Challenges loaded from Firestore:", categoryChallenges);
-        initializeAllCategories(); // 更新自動完成列表
+        initializeAllCategories(); // 更新自動完成列表 (現在包含所有來源的分類)
+        renderFormulaCategoriesFilter(); // 渲染分類篩選按鈕
         if (categoryChallengeSection.classList.contains('hidden')) {
             // 如果不在藥劑分類挑戰頁面，不需要重新顯示問題
         } else {
             displayCategoryQuestion(); // 如果在藥劑分類挑戰頁面，重新顯示問題
         }
-        renderManagedCategories(); // 重新渲染分類管理列表 (不帶搜尋條件)
+        renderManagedCategories(categorySearchInput.value); // 重新渲染分類管理列表 (帶搜尋條件)
     }, (error) => {
         console.error("Error listening to category challenges:", error);
         if (error.code === 'permission-denied') {
@@ -270,6 +309,35 @@ function listenToCategoryChallenges() { // 新增監聽器
         }
         if (categoryChallenges.length === 0) {
             noCategoryFormulasMessage.classList.remove('hidden');
+        }
+    });
+}
+
+function listenToFormulaIntroductions() { // 新增監聽器
+    if (!firestoreDb || !authReady) {
+        console.warn("Firestore not ready for formula introductions listener. Data will not be loaded from cloud.");
+        if (formulaIntroductions.length === 0) {
+            noIntroductionsMessage.classList.remove('hidden');
+        }
+        return;
+    }
+    console.log(`嘗試監聽方劑介紹 (formula_introductions) 路徑: artifacts/${currentAppId}/public/data/formula_introductions`);
+    const introColRef = collection(firestoreDb, `artifacts/${currentAppId}/public/data/formula_introductions`);
+    onSnapshot(introColRef, (snapshot) => {
+        formulaIntroductions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("Formula Introductions loaded from Firestore:", formulaIntroductions);
+        initializeAllCategories(); // 更新所有分類列表，因為介紹卡片也有分類
+        renderFormulaCategoriesFilter(); // 重新渲染分類篩選按鈕
+        renderFormulaIntroductions(currentFormulaIntroCategoryFilter, introSearchInput.value); // 重新渲染介紹卡片 (帶篩選和搜尋條件)
+    }, (error) => {
+        console.error("Error listening to formula introductions:", error);
+        if (error.code === 'permission-denied') {
+            showCustomMessageBox("錯誤", "載入方劑介紹失敗：權限不足。請檢查您的 Firestore 安全規則。");
+        } else {
+            showCustomMessageBox("錯誤", "無法載入方劑介紹，請檢查網路連線。");
+        }
+        if (formulaIntroductions.length === 0) {
+            noIntroductionsMessage.classList.remove('hidden');
         }
     });
 }
@@ -306,7 +374,8 @@ function listenToMistakeRecords() {
 // --- 輔助函數：顯示/隱藏區塊 ---
 function showSection(sectionToShow) {
     quizSection.classList.add('hidden');
-    categoryChallengeSection.classList.add('hidden'); // 新增
+    categoryChallengeSection.classList.add('hidden');
+    formulaIntroSection.classList.add('hidden'); // 新增
     mistakesSection.classList.add('hidden');
     manageSection.classList.add('hidden');
     sectionToShow.classList.remove('hidden');
@@ -315,7 +384,8 @@ function showSection(sectionToShow) {
 function showLoadingSpinner() {
     loadingSpinner.classList.remove('hidden');
     quizSection.classList.add('hidden');
-    categoryChallengeSection.classList.add('hidden'); // 新增
+    categoryChallengeSection.classList.add('hidden');
+    formulaIntroSection.classList.add('hidden'); // 新增
     mistakesSection.classList.add('hidden');
     manageSection.classList.add('hidden');
 }
@@ -443,13 +513,18 @@ function initializeAllIngredients() {
 }
 
 /**
- * 初始化所有分類名稱用於自動完成 (藥劑分類大挑戰)
+ * 初始化所有分類名稱用於自動完成 (來自所有來源的分類)
  */
-function initializeAllCategories() { // 新增
+function initializeAllCategories() {
     const uniqueCategories = new Set();
     categoryChallenges.forEach(challenge => {
         if (challenge.category) {
             uniqueCategories.add(challenge.category);
+        }
+    });
+    formulaIntroductions.forEach(intro => { // 從方劑介紹中獲取分類
+        if (intro.category) {
+            uniqueCategories.add(intro.category);
         }
     });
     allCategories = Array.from(uniqueCategories).sort();
@@ -560,14 +635,14 @@ async function showCorrectAnswer() {
  * @param {string} formulaName 方劑名稱
  * @param {string} userAnswer 使用者的回答
  * @param {string} correctAnswer 正確答案
- * @param {string} challengeType 挑戰類型 (新增)
+ * @param {string} challengeType 挑戰類型 (e.g., '藥材組成', '藥劑分類')
  */
 async function addMistake(formulaName, userAnswer, correctAnswer, challengeType) {
     const newRecord = {
         formulaName: formulaName,
         userAnswer: userAnswer || "未作答",
         correctAnswer: correctAnswer,
-        challengeType: challengeType, // 新增欄位
+        challengeType: challengeType,
         timestamp: new Date().toISOString()
     };
 
@@ -599,7 +674,7 @@ async function addMistake(formulaName, userAnswer, correctAnswer, challengeType)
 }
 
 
-// --- 核心藥劑分類大挑戰邏輯 (新增) ---
+// --- 核心藥劑分類大挑戰邏輯 ---
 /**
  * 顯示一道新的藥劑分類問題
  */
@@ -927,7 +1002,7 @@ formulaForm.addEventListener('submit', async (event) => {
             await showCustomMessageBox("成功", "新藥材組成題目已在本地新增！");
         }
         localStorage.setItem('localFormulas', JSON.stringify(formulas)); // 儲存到本地
-        renderManagedFormulas(); // 重新渲染，包含任何搜尋過濾
+        renderManagedFormulas(formulaSearchInput.value); // 重新渲染，包含任何搜尋過濾
         closeFormulaModal();
     }
 });
@@ -963,7 +1038,7 @@ async function deleteFormula(formulaId) {
             if (formulas.length < initialLength) {
                 localStorage.setItem('localFormulas', JSON.stringify(formulas));
                 await showCustomMessageBox("成功", "藥材組成題目已從本地刪除！");
-                renderManagedFormulas(); // 重新渲染，包含任何搜尋過濾
+                renderManagedFormulas(formulaSearchInput.value); // 重新渲染，包含任何搜尋過濾
             } else {
                 await showCustomMessageBox("錯誤", "本地刪除失敗：找不到要刪除的藥材組成題目。");
             }
@@ -972,7 +1047,7 @@ async function deleteFormula(formulaId) {
 }
 
 
-// --- 藥劑分類題目管理邏輯 (新增) ---
+// --- 藥劑分類題目管理邏輯 ---
 /**
  * 渲染藥劑分類題目管理列表，支援搜尋功能
  * @param {string} [searchText=''] 搜尋關鍵字，如果為空則顯示所有題目
@@ -1108,7 +1183,7 @@ categoryForm.addEventListener('submit', async (event) => {
             await showCustomMessageBox("成功", "新藥劑分類題目已在本地新增！");
         }
         localStorage.setItem('localCategoryChallenges', JSON.stringify(categoryChallenges));
-        renderManagedCategories(); // 重新渲染，包含任何搜尋過濾
+        renderManagedCategories(categorySearchInput.value); // 重新渲染，包含任何搜尋過濾
         closeCategoryModal();
     }
 });
@@ -1136,9 +1211,234 @@ async function deleteCategory(challengeId) {
             if (categoryChallenges.length < initialLength) {
                 localStorage.setItem('localCategoryChallenges', JSON.stringify(categoryChallenges));
                 await showCustomMessageBox("成功", "藥劑分類題目已從本地刪除！");
-                renderManagedCategories(); // 重新渲染，包含任何搜尋過濾
+                renderManagedCategories(categorySearchInput.value); // 重新渲染，包含任何搜尋過濾
             } else {
                 await showCustomMessageBox("錯誤", "本地刪除失敗：找不到要刪除的藥劑分類題目。");
+            }
+        }
+    }
+}
+
+
+// --- 方劑介紹區塊邏輯 (新增) ---
+/**
+ * 渲染方劑介紹卡片列表，支援分類篩選和搜尋功能
+ * @param {string} categoryFilter 當前篩選的分類，'全部'表示不篩選
+ * @param {string} searchText 搜尋關鍵字，用於方劑名稱篩選
+ */
+function renderFormulaIntroductions(categoryFilter = '全部', searchText = '') {
+    formulaIntroductionsList.innerHTML = '';
+    let filteredIntros = formulaIntroductions;
+
+    // 1. 根據分類篩選
+    if (categoryFilter !== '全部') {
+        filteredIntros = filteredIntros.filter(intro => normalizeCategory(intro.category) === normalizeCategory(categoryFilter));
+    }
+
+    // 2. 根據搜尋文字篩選
+    if (searchText) {
+        const normalizedSearchText = searchText.toLowerCase().trim();
+        filteredIntros = filteredIntros.filter(intro =>
+            (intro.name || '').toLowerCase().includes(normalizedSearchText)
+        );
+    }
+
+    if (filteredIntros.length === 0) {
+        noIntroductionsMessage.classList.remove('hidden');
+    } else {
+        noIntroductionsMessage.classList.add('hidden');
+    }
+
+    filteredIntros.forEach(intro => {
+        const introCard = document.createElement('div');
+        introCard.className = 'bg-white border border-gray-200 rounded-lg p-5 shadow-md hover:shadow-lg transition-shadow duration-200 relative';
+        introCard.innerHTML = `
+            <h3 class="text-2xl font-bold text-blue-700 mb-2 break-words">${intro.name}</h3>
+            <p class="text-sm font-semibold text-gray-600 mb-3">${intro.category ? `分類：${intro.category}` : ''}</p>
+            ${intro.ingredients ? `<p class="text-gray-700 text-sm mb-2 break-words"><strong>藥材：</strong> ${intro.ingredients}</p>` : ''}
+            <p class="text-gray-800 mb-2 break-words"><strong>主治：</strong> ${intro.indications || '無'}</p>
+            <p class="text-gray-800 break-words"><strong>效果：</strong> ${intro.effects || '無'}</p>
+            <div class="flex space-x-2 mt-4 justify-end">
+                <button data-id="${intro.id}" class="edit-intro-btn bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-yellow-600 transition duration-300">
+                    編輯
+                </button>
+                <button data-id="${intro.id}" class="delete-intro-btn bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-600 transition duration-300">
+                    刪除
+                </button>
+            </div>
+        `;
+        formulaIntroductionsList.appendChild(introCard);
+    });
+
+    document.querySelectorAll('#formula-introductions-list .edit-intro-btn').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const introId = event.target.dataset.id;
+            openFormulaIntroModal(introId);
+        });
+    });
+
+    document.querySelectorAll('#formula-introductions-list .delete-intro-btn').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const introId = event.target.dataset.id;
+            deleteFormulaIntro(introId);
+        });
+    });
+}
+
+/**
+ * 渲染方劑介紹區的分類篩選按鈕
+ */
+function renderFormulaCategoriesFilter() {
+    categoryFilterContainer.innerHTML = '';
+    const allButton = document.createElement('button');
+    allButton.className = `category-filter-btn px-4 py-2 rounded-lg font-semibold transition duration-300 active:scale-95 mb-2 md:mb-0 ${currentFormulaIntroCategoryFilter === '全部' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`;
+    allButton.textContent = '全部';
+    allButton.dataset.category = '全部';
+    categoryFilterContainer.appendChild(allButton);
+
+    allCategories.forEach(category => {
+        if (category.trim() === '') return; // 避免空類別按鈕
+        const button = document.createElement('button');
+        button.className = `category-filter-btn px-4 py-2 rounded-lg font-semibold transition duration-300 active:scale-95 mb-2 md:mb-0 ${currentFormulaIntroCategoryFilter === category ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`;
+        button.textContent = category;
+        button.dataset.category = category;
+        categoryFilterContainer.appendChild(button);
+    });
+
+    // 為所有分類篩選按鈕添加事件監聽器
+    document.querySelectorAll('.category-filter-btn').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const selectedCategory = event.target.dataset.category;
+            currentFormulaIntroCategoryFilter = selectedCategory; // 更新選中的分類
+            renderFormulaIntroductions(selectedCategory, introSearchInput.value); // 重新渲染卡片
+            // 更新按鈕樣式
+            document.querySelectorAll('.category-filter-btn').forEach(btn => {
+                if (btn.dataset.category === selectedCategory) {
+                    btn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+                    btn.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                } else {
+                    btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+                    btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                }
+            });
+        });
+    });
+}
+
+
+/**
+ * 開啟新增/編輯方劑介紹彈窗
+ * @param {string|null} introId 要編輯的介紹卡片 ID，若為 null 則為新增模式
+ */
+function openFormulaIntroModal(introId = null) {
+    formulaIntroForm.reset();
+    formulaIntroModal.dataset.editId = introId;
+
+    if (introId) {
+        formulaIntroModalTitle.textContent = "編輯方劑介紹";
+        const introToEdit = formulaIntroductions.find(i => i.id === introId);
+        if (introToEdit) {
+            introFormulaNameInput.value = introToEdit.name || '';
+            introCategoryInput.value = introToEdit.category || '';
+            introIngredientsInput.value = introToEdit.ingredients || '';
+            introIndicationsInput.value = introToEdit.indications || '';
+            introEffectsInput.value = introToEdit.effects || '';
+        }
+    } else {
+        formulaIntroModalTitle.textContent = "新增方劑介紹";
+        formulaIntroModal.dataset.editId = '';
+    }
+    formulaIntroModal.classList.remove('hidden');
+}
+
+/**
+ * 關閉新增/編輯方劑介紹彈窗
+ */
+function closeFormulaIntroModal() {
+    formulaIntroModal.classList.add('hidden');
+    formulaIntroModal.dataset.editId = '';
+}
+
+/**
+ * 處理新增/編輯方劑介紹的表單提交
+ */
+formulaIntroForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const name = introFormulaNameInput.value.trim();
+    const category = introCategoryInput.value.trim();
+    const ingredients = introIngredientsInput.value.trim();
+    const indications = introIndicationsInput.value.trim();
+    const effects = introEffectsInput.value.trim();
+
+    if (!name || !category || !indications || !effects) {
+        await showCustomMessageBox("輸入錯誤", "方劑名稱、分類、主治、效果是必填項！");
+        return;
+    }
+
+    const introData = { name, category, ingredients, indications, effects };
+    const editId = formulaIntroModal.dataset.editId;
+
+    if (firestoreDb && authReady && currentAppId) {
+        try {
+            if (editId) {
+                await setDoc(doc(firestoreDb, `artifacts/${currentAppId}/public/data/formula_introductions`, editId), introData);
+                await showCustomMessageBox("成功", "方劑介紹更新成功！");
+            } else {
+                await addDoc(collection(firestoreDb, `artifacts/${currentAppId}/public/data/formula_introductions`), introData);
+                await showCustomMessageBox("成功", "新方劑介紹新增成功！");
+            }
+            closeFormulaIntroModal();
+        } catch (e) {
+            console.error("儲存方劑介紹失敗:", e);
+            await showCustomMessageBox("錯誤", "儲存方劑介紹失敗，請檢查網路連線或 Firestore 規則。");
+        }
+    } else {
+        // 回退到 localStorage 處理
+        if (editId) {
+            const index = formulaIntroductions.findIndex(i => i.id === editId);
+            if (index !== -1) {
+                formulaIntroductions[index] = { ...introData, id: editId };
+                await showCustomMessageBox("成功", "方劑介紹已在本地更新！");
+            } else {
+                await showCustomMessageBox("錯誤", "本地編輯失敗：找不到要編輯的方劑介紹。");
+            }
+        } else {
+            formulaIntroductions.push({ ...introData, id: `local-intro-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` });
+            await showCustomMessageBox("成功", "新方劑介紹已在本地新增！");
+        }
+        localStorage.setItem('localFormulaIntroductions', JSON.stringify(formulaIntroductions));
+        renderFormulaIntroductions(currentFormulaIntroCategoryFilter, introSearchInput.value);
+        closeFormulaIntroModal();
+    }
+});
+
+/**
+ * 啟動刪除方劑介紹流程
+ * @param {string} introId 要刪除的介紹卡片 ID
+ */
+async function deleteFormulaIntro(introId) {
+    const introToDelete = formulaIntroductions.find(i => i.id === introId);
+    const confirmDeletion = await showCustomMessageBox("確認刪除", `您確定要刪除方劑介紹「${introToDelete ? introToDelete.name : '未知方劑'}」嗎？此操作不可恢復。`, true);
+    if (confirmDeletion) {
+        if (firestoreDb && authReady && currentAppId) {
+            try {
+                await deleteDoc(doc(firestoreDb, `artifacts/${currentAppId}/public/data/formula_introductions`, introId));
+                await showCustomMessageBox("成功", "方劑介紹刪除成功！");
+            } catch (e) {
+                console.error("刪除方劑介紹失敗:", e);
+                await showCustomMessageBox("錯誤", "刪除方劑介紹失敗，請檢查網路連線或 Firestore 規則。");
+            }
+        } else {
+            // 回退到 localStorage 刪除
+            const initialLength = formulaIntroductions.length;
+            formulaIntroductions = formulaIntroductions.filter(i => i.id !== introId);
+            if (formulaIntroductions.length < initialLength) {
+                localStorage.setItem('localFormulaIntroductions', JSON.stringify(formulaIntroductions));
+                await showCustomMessageBox("成功", "方劑介紹已從本地刪除！");
+                renderFormulaIntroductions(currentFormulaIntroCategoryFilter, introSearchInput.value);
+            } else {
+                await showCustomMessageBox("錯誤", "本地刪除失敗：找不到要刪除的方劑介紹。");
             }
         }
     }
@@ -1191,14 +1491,16 @@ function showAutocompleteSuggestions(input) {
 }
 
 /**
- * 根據輸入顯示自動完成建議 (藥劑分類大挑戰)
+ * 根據輸入顯示自動完成建議 (藥劑分類大挑戰和方劑介紹新增/編輯)
+ * @param {HTMLInputElement} inputElement 綁定自動完成的輸入框元素
+ * @param {HTMLElement} resultsContainer 自動完成結果的容器元素
  * @param {string} input 用戶在輸入框中鍵入的文字
  */
-function showCategoryAutocompleteSuggestions(input) { // 新增
-    categoryAutocompleteResults.innerHTML = '';
+function showCategoryAutocompleteSuggestions(inputElement, resultsContainer, input) {
+    resultsContainer.innerHTML = '';
     const typedText = input.toLowerCase().trim();
     if (typedText.length === 0) {
-        categoryAutocompleteResults.classList.add('hidden');
+        resultsContainer.classList.add('hidden');
         return;
     }
 
@@ -1212,15 +1514,15 @@ function showCategoryAutocompleteSuggestions(input) { // 新增
             suggestionItem.className = 'p-2 cursor-pointer hover:bg-blue-100 rounded-lg text-gray-800';
             suggestionItem.textContent = suggestion;
             suggestionItem.addEventListener('click', () => {
-                userCategoryAnswerInput.value = suggestion;
-                categoryAutocompleteResults.classList.add('hidden');
-                userCategoryAnswerInput.focus();
+                inputElement.value = suggestion;
+                resultsContainer.classList.add('hidden');
+                inputElement.focus();
             });
-            categoryAutocompleteResults.appendChild(suggestionItem);
+            resultsContainer.appendChild(suggestionItem);
         });
-        categoryAutocompleteResults.classList.remove('hidden');
+        resultsContainer.classList.remove('hidden');
     } else {
-        categoryAutocompleteResults.classList.add('hidden');
+        resultsContainer.classList.add('hidden');
     }
 }
 
@@ -1236,9 +1538,15 @@ showQuizBtn.addEventListener('click', () => {
     displayQuestion(); // 切換到藥材組成挑戰頁面時重新載入問題
 });
 
-showCategoryChallengeBtn.addEventListener('click', () => { // 新增事件監聽
+showCategoryChallengeBtn.addEventListener('click', () => {
     showSection(categoryChallengeSection);
     displayCategoryQuestion(); // 切換到藥劑分類挑戰頁面時重新載入問題
+});
+
+showFormulaIntroBtn.addEventListener('click', () => { // 新增事件監聽
+    showSection(formulaIntroSection);
+    renderFormulaCategoriesFilter(); // 渲染篩選按鈕
+    renderFormulaIntroductions(currentFormulaIntroCategoryFilter, introSearchInput.value); // 渲染介紹卡片
 });
 
 showMistakesBtn.addEventListener('click', () => {
@@ -1251,8 +1559,8 @@ showManageBtn.addEventListener('click', () => {
     // 進入管理頁面時，清空搜尋框並重新渲染所有題目
     formulaSearchInput.value = ''; // 清空搜尋框
     categorySearchInput.value = ''; // 清空搜尋框
-    renderManagedFormulas(); // 載入藥材組成題目管理列表
-    renderManagedCategories(); // 載入藥劑分類題目管理列表
+    renderManagedFormulas(''); // 載入藥材組成題目管理列表 (不帶搜尋條件)
+    renderManagedCategories(''); // 載入藥劑分類題目管理列表 (不帶搜尋條件)
 });
 
 // 藥材組成挑戰按鈕
@@ -1260,7 +1568,7 @@ submitAnswerBtn.addEventListener('click', checkAnswer);
 showCorrectAnswerBtn.addEventListener('click', showCorrectAnswer);
 nextQuestionBtn.addEventListener('click', displayQuestion);
 
-// 藥劑分類大挑戰按鈕 (新增)
+// 藥劑分類大挑戰按鈕
 submitCategoryAnswerBtn.addEventListener('click', checkCategoryAnswer);
 showCorrectCategoryAnswerBtn.addEventListener('click', showCorrectCategoryAnswer);
 nextCategoryQuestionBtn.addEventListener('click', displayCategoryQuestion);
@@ -1270,26 +1578,35 @@ clearMistakesBtn.addEventListener('click', clearAllMistakes);
 
 // 題目管理新增按鈕
 addFormulaBtn.addEventListener('click', () => openFormulaModal()); // 開啟新增藥材組成題目模式
-addCategoryChallengeBtn.addEventListener('click', () => openCategoryModal()); // 開啟新增藥劑分類題目模式 (新增)
+addCategoryChallengeBtn.addEventListener('click', () => openCategoryModal()); // 開啟新增藥劑分類題目模式
+addFormulaIntroBtnTop.addEventListener('click', () => openFormulaIntroModal()); // 新增：方劑介紹區的「新增」按鈕
 
 // 彈窗的取消按鈕
 cancelFormulaBtn.addEventListener('click', closeFormulaModal);
-cancelCategoryBtn.addEventListener('click', closeCategoryModal); // 新增
+cancelCategoryBtn.addEventListener('click', closeCategoryModal);
+cancelIntroBtn.addEventListener('click', closeFormulaIntroModal); // 新增
 
 // 輸入框監聽器，用於自動完成
 userAnswerInput.addEventListener('input', (event) => {
     showAutocompleteSuggestions(event.target.value);
 });
-userCategoryAnswerInput.addEventListener('input', (event) => { // 新增
-    showCategoryAutocompleteSuggestions(event.target.value);
+userCategoryAnswerInput.addEventListener('input', (event) => {
+    showCategoryAutocompleteSuggestions(userCategoryAnswerInput, categoryAutocompleteResults, event.target.value);
+});
+introCategoryInput.addEventListener('input', (event) => { // 新增方劑介紹分類輸入框的自動完成
+    showCategoryAutocompleteSuggestions(introCategoryInput, introCategoryAutocompleteResults, event.target.value);
 });
 
-// 題目管理搜尋框監聽器 (新增)
+
+// 題目管理搜尋框監聽器 (修復：傳遞搜尋字串)
 formulaSearchInput.addEventListener('input', (event) => {
     renderManagedFormulas(event.target.value);
 });
 categorySearchInput.addEventListener('input', (event) => {
     renderManagedCategories(event.target.value);
+});
+introSearchInput.addEventListener('input', (event) => { // 新增方劑介紹搜尋框
+    renderFormulaIntroductions(currentFormulaIntroCategoryFilter, event.target.value);
 });
 
 
@@ -1303,25 +1620,43 @@ document.addEventListener('click', (event) => {
     if (!userCategoryAnswerInput.contains(event.target) && !categoryAutocompleteResults.contains(event.target)) {
         categoryAutocompleteResults.classList.add('hidden');
     }
-    // 隱藏藥材組成題目彈窗 (如果點擊到彈窗本身或其內容則不隱藏)
-    if (!formulaModal.classList.contains('hidden') && !formulaModal.contains(event.target)) {
-        // closeFormulaModal(); // 自動關閉可能太激進，使用者可能只是點擊到背景
+    // 隱藏方劑介紹分類輸入框的自動完成結果
+    if (!introCategoryInput.contains(event.target) && !introCategoryAutocompleteResults.contains(event.target)) {
+        introCategoryAutocompleteResults.classList.add('hidden');
     }
-    // 隱藏藥劑分類題目彈窗 (如果點擊到彈窗本身或其內容則不隱藏)
-    if (!categoryModal.classList.contains('hidden') && !categoryModal.contains(event.target)) {
-        // closeCategoryModal(); // 自動關閉可能太激進，使用者可能只是點擊到背景
+
+    // 判斷是否點擊到模態框內容或打開模態框的按鈕
+    const isClickInsideFormulaModal = formulaModal.contains(event.target) || event.target === addFormulaBtn;
+    const isClickInsideCategoryModal = categoryModal.contains(event.target) || event.target === addCategoryChallengeBtn;
+    const isClickInsideFormulaIntroModal = formulaIntroModal.contains(event.target) || event.target === addFormulaIntroBtnTop;
+
+    // 如果點擊不在模態框內部，也不在打開模態框的按鈕上，則關閉模態框。
+    // 注意：這裡只處理點擊空白處關閉，點擊取消按鈕依然需要綁定 closeXxxModal。
+    // 為了避免過度干預使用者操作，預設不自動關閉，讓使用者必須點擊取消或儲存。
+    // 如果您需要點擊外部自動關閉，可以解除以下註釋，但請測試使用者體驗。
+    /*
+    if (!isClickInsideFormulaModal && !formulaModal.classList.contains('hidden')) {
+        closeFormulaModal();
     }
+    if (!isClickInsideCategoryModal && !categoryModal.classList.contains('hidden')) {
+        closeCategoryModal();
+    }
+    if (!isClickInsideFormulaIntroModal && !formulaIntroModal.classList.contains('hidden')) {
+        closeFormulaIntroModal();
+    }
+    */
 });
 
-// 按下 Esc 鍵也隱藏自動完成列表
-userAnswerInput.addEventListener('keydown', (event) => {
+// 按下 Esc 鍵也隱藏自動完成列表和模態框 (模態框的關閉邏輯與點擊外部類似，建議手動關閉)
+document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         autocompleteResults.classList.add('hidden');
-    }
-});
-userCategoryAnswerInput.addEventListener('keydown', (event) => { // 新增
-    if (event.key === 'Escape') {
         categoryAutocompleteResults.classList.add('hidden');
+        introCategoryAutocompleteResults.classList.add('hidden');
+        // 您可以選擇在這裡也加入模態框的關閉邏輯，例如：
+        // if (!formulaModal.classList.contains('hidden')) closeFormulaModal();
+        // if (!categoryModal.classList.contains('hidden')) closeCategoryModal();
+        // if (!formulaIntroModal.classList.contains('hidden')) closeFormulaIntroModal();
     }
 });
 
@@ -1339,7 +1674,7 @@ userAnswerInput.addEventListener('keydown', (event) => {
 });
 
 // 處理 Enter 鍵提交答案，而不是換行 (藥劑分類大挑戰)
-userCategoryAnswerInput.addEventListener('keydown', (event) => { // 新增
+userCategoryAnswerInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) { // Shift+Enter 仍可換行
         event.preventDefault(); // 阻止預設換行行為
         if (!nextCategoryQuestionBtn.classList.contains('hidden')) {
