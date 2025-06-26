@@ -17,10 +17,7 @@ const firebaseConfig = {
   appId: "1:686829295344:web:8fe4ce8aa6644e41701435",
   measurementId: "G-G19JF36EW4"
 };
-
 // =====================================================================
-
-
 // Firebase 應用程式和服務實例
 let app;
 let db;
