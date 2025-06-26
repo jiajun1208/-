@@ -1,10 +1,11 @@
 // 導入 Firebase 模組 (使用完整的 CDN URL)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // =====================================================================
 // 請在此處貼上您的 Firebase 專案配置！
+// 您可以在 Firebase Console (console.firebase.google.com)
 // 選擇您的專案 -> 專案設定 -> 一般 -> 您的應用程式，找到這個配置物件。
 // =====================================================================
 const firebaseConfig = {
@@ -21,13 +22,14 @@ const firebaseConfig = {
 // Firebase 服務實例將儲存在這些模組作用域變數中
 let firestoreDb = null;
 let firebaseAuth = null;
+let firebaseAppInstance = null; // 新增：用於儲存 Firebase app 實例
 let currentAppId = null; // 從 firebaseConfig.projectId 獲取
 
 // 應用程式狀態變數 (模組作用域)
 let userId = 'anonymous'; // 當前使用者 ID
 let authReady = false; // 標誌，表示 Firebase 認證是否準備就緒
 
-// --- DOM 元素獲取 ---
+// --- DOM 元素獲取 (保持不變) ---
 const userInfoElem = document.getElementById('user-info');
 const showQuizBtn = document.getElementById('show-quiz-btn');
 const showMistakesBtn = document.getElementById('show-mistakes-btn');
@@ -74,23 +76,24 @@ const messageBoxContent = document.getElementById('message-box-content');
 const messageBoxCloseBtn = document.getElementById('message-box-close-btn');
 const messageBoxCancelBtn = document.getElementById('message-box-cancel-btn');
 
-// --- 應用程式狀態變數 ---
+// --- 應用程式狀態數據 (模組作用域) ---
 let currentFormula = null; // 當前問題的方劑物件
 let mistakeRecords = []; // 儲存錯題記錄
 let formulas = []; // 儲存從 Firestore 獲取的方劑列表
 let allIngredients = []; // 儲存所有藥材名稱，用於自動完成
 
+
 // --- Firebase 初始化 ---
 async function initializeFirebase() {
     // 檢查 Firebase 配置是否已填寫
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY" || !firebaseConfig.projectId || firebaseConfig.projectId === "YOUR_PROJECT_ID") {
         console.error("Firebase configuration is missing or incomplete. Please update firebaseConfig.");
-        showCustomMessageBox("錯誤", "Firebase 配置不完整。請編輯 script.js 檔案並填入您的 Firebase 專案資訊。");
+        await showCustomMessageBox("錯誤", "Firebase 配置不完整。請編輯 script.js 檔案並填入您的 Firebase 專案資訊。");
         hideLoadingSpinner();
         // 啟用本地儲存作為備用
-        app = null; // 標記 Firebase 未初始化
-        db = null;
-        auth = null;
+        firestoreDb = null;
+        firebaseAuth = null;
+        firebaseAppInstance = null; // 確保這個變數在錯誤時也為 null
         userId = crypto.randomUUID(); // 生成一個本地使用者 ID
         userInfoElem.textContent = `匿名使用者 ID: ${userId} (無 Firebase 連線)`;
         showManageBtn.classList.add('hidden'); // 無法管理題目
@@ -102,33 +105,31 @@ async function initializeFirebase() {
         return;
     }
 
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-
-    // 使用 firebaseConfig.projectId 作為 appId
-    const appId = firebaseConfig.projectId;
+    firebaseAppInstance = initializeApp(firebaseConfig); // 將 Firebase app 實例賦值給模組級變數
+    firebaseAuth = getAuth(firebaseAppInstance); // 使用模組級變數
+    firestoreDb = getFirestore(firebaseAppInstance); // 使用模組級變數
+    currentAppId = firebaseConfig.projectId; // 將專案 ID 儲存到模組作用域變數
 
     // 監聽認證狀態變化
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(firebaseAuth, async (user) => {
         if (user) {
             userId = user.uid;
             userInfoElem.textContent = `使用者 ID: ${userId}`;
             showManageBtn.classList.remove('hidden'); // 登入後顯示管理按鈕
             authReady = true;
             // 在認證準備就緒後啟動 Firestore 監聽器
-            listenToFormulas(appId);
-            listenToMistakeRecords(appId);
+            listenToFormulas();
+            listenToMistakeRecords();
         } else {
             // 如果沒有用戶登錄，嘗試匿名登錄
             try {
-                await signInAnonymously(auth); // GitHub Pages 預設使用匿名登入
-                userId = auth.currentUser?.uid || crypto.randomUUID(); // Fallback in case uid is null
+                await signInAnonymously(firebaseAuth); // GitHub Pages 預設使用匿名登入
+                userId = firebaseAuth.currentUser?.uid || crypto.randomUUID(); // Fallback in case uid is null
                 userInfoElem.textContent = `使用者 ID: ${userId} (匿名)`;
                 showManageBtn.classList.remove('hidden'); // 匿名登入也顯示管理按鈕
                 authReady = true;
-                listenToFormulas(appId);
-                listenToMistakeRecords(appId);
+                listenToFormulas();
+                listenToMistakeRecords();
             } catch (error) {
                 console.error("Firebase authentication failed:", error);
                 userId = crypto.randomUUID(); // Fallback to a random ID if auth fails
@@ -136,8 +137,8 @@ async function initializeFirebase() {
                 showManageBtn.classList.add('hidden'); // 登入失敗則隱藏管理按鈕
                 authReady = true; // 即使失敗也標記為準備就緒，讓應用程式繼續
                 // 如果認證失敗，還是需要嘗試載入題目 (可能沒有權限)
-                listenToFormulas(appId);
-                showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
+                listenToFormulas();
+                await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
             }
         }
         hideLoadingSpinner();
@@ -148,9 +149,16 @@ async function initializeFirebase() {
 }
 
 // --- Firestore 數據監聽 ---
-function listenToFormulas(currentAppId) {
-    if (!db || !authReady) return;
-    const formulasColRef = collection(db, `artifacts/${currentAppId}/public/data/formulas`);
+function listenToFormulas() {
+    if (!firestoreDb || !authReady) {
+        console.warn("Firestore not ready for formulas listener.");
+        // 如果載入失敗，顯示沒有題目的訊息
+        if (formulas.length === 0) {
+            noFormulasMessage.classList.remove('hidden');
+        }
+        return;
+    }
+    const formulasColRef = collection(firestoreDb, `artifacts/${currentAppId}/public/data/formulas`);
     onSnapshot(formulasColRef, (snapshot) => {
         formulas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log("Formulas loaded from Firestore:", formulas);
@@ -171,16 +179,13 @@ function listenToFormulas(currentAppId) {
     });
 }
 
-function listenToMistakeRecords(currentAppId) {
-    if (!db || !authReady) return;
-    // 確保 userId 已設定
-    if (userId === 'anonymous') {
-        console.warn("Attempted to listen to mistake records without a proper userId.");
-        // 如果是匿名用戶但未成功登錄，回退到 localStorage
-        loadMistakeRecordsLocal();
+function listenToMistakeRecords() {
+    if (!firestoreDb || !authReady || userId === 'anonymous') {
+        console.warn("Firestore or user not ready for mistake records listener. Falling back to LocalStorage.");
+        loadMistakeRecordsLocal(); // 回退到 localStorage
         return;
     }
-    const mistakeRecordsColRef = collection(db, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
+    const mistakeRecordsColRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
     onSnapshot(mistakeRecordsColRef, (snapshot) => {
         mistakeRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log("Mistake records loaded from Firestore:", mistakeRecords);
@@ -287,7 +292,7 @@ function saveMistakeRecordsLocal() {
  * 移除空白字符，轉換為小寫，並處理常見的同義字/簡寫
  * @param {string} ingredient 藥材名稱
  * @returns {string} 標準化後的藥材名稱
- */
+*/
 function normalizeIngredient(ingredient) {
     return ingredient.trim().toLowerCase()
         .replace(/炙?甘草/g, '炙甘草') // 炙甘草和甘草統一
@@ -437,11 +442,10 @@ async function addMistake(formulaName, userAnswer, correctAnswer) {
         timestamp: new Date().toISOString()
     };
 
-    if (db && userId !== 'anonymous' && authReady) {
+    if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
         // 使用 Firestore 儲存
         try {
-            const currentAppId = firebaseConfig.projectId;
-            await addDoc(collection(db, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`), newRecord);
+            await addDoc(collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`), newRecord);
             console.log("Mistake added to Firestore.");
         } catch (e) {
             console.error("將錯題加入 Firestore 失敗:", e);
@@ -512,11 +516,10 @@ function renderMistakes() {
 async function removeMistake(recordId) {
     const confirmRemoval = await showCustomMessageBox("確認移除", "您確定要移除這條錯題記錄嗎？", true);
     if (confirmRemoval) {
-        if (db && userId !== 'anonymous' && authReady) {
+        if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
             // 使用 Firestore 移除
             try {
-                const currentAppId = firebaseConfig.projectId;
-                await deleteDoc(doc(db, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`, recordId));
+                await deleteDoc(doc(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`, recordId));
                 showCustomMessageBox("完成", "錯題記錄已從雲端移除。");
             } catch (e) {
                 console.error("從 Firestore 移除錯題失敗:", e);
@@ -541,12 +544,11 @@ async function removeMistake(recordId) {
 async function clearAllMistakes() {
     const confirmClear = await showCustomMessageBox("確認清空", "您確定要清空所有錯題記錄嗎？此操作不可恢復。", true);
     if (confirmClear) {
-        if (db && userId !== 'anonymous' && authReady) {
+        if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
             // 使用 Firestore 清空 (迭代刪除)
             try {
-                const currentAppId = firebaseConfig.projectId;
                 for (const record of mistakeRecords) {
-                    await deleteDoc(doc(db, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`, record.id));
+                    await deleteDoc(doc(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`, record.id));
                 }
                 showCustomMessageBox("完成", "所有錯題記錄已從雲端清空。");
             } catch (e) {
@@ -577,7 +579,7 @@ function renderManagedFormulas() {
         formulaItem.className = 'bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center space-y-2 md:space-y-0';
         formulaItem.innerHTML = `
             <div class="flex-grow">
-                <h3 class="text-xl font-semibold text-blue-800 break-words">${formula.name}</h3>
+                <h3 class="text-xl font-semibold text-blue-800 mb-2 break-words">${formula.name}</h3>
                 <p class="text-gray-700 text-sm break-words">${(formula.ingredients || []).join('、')}</p>
                 <p class="text-gray-600 text-xs italic break-words">${formula.hint || ''}</p>
             </div>
@@ -657,16 +659,15 @@ formulaForm.addEventListener('submit', async (event) => {
     const formulaData = { name, ingredients, hint };
     const editId = formulaModal.dataset.editId;
 
-    if (db && authReady) {
+    if (firestoreDb && authReady && currentAppId) {
         try {
-            const currentAppId = firebaseConfig.projectId;
             if (editId) {
                 // 編輯現有方劑
-                await setDoc(doc(db, `artifacts/${currentAppId}/public/data/formulas`, editId), formulaData);
+                await setDoc(doc(firestoreDb, `artifacts/${currentAppId}/public/data/formulas`, editId), formulaData);
                 await showCustomMessageBox("成功", "方劑更新成功！");
             } else {
                 // 新增方劑
-                await addDoc(collection(db, `artifacts/${currentAppId}/public/data/formulas`), formulaData);
+                await addDoc(collection(firestoreDb, `artifacts/${currentAppId}/public/data/formulas`), formulaData);
                 await showCustomMessageBox("成功", "新方劑新增成功！");
             }
             closeFormulaModal();
@@ -708,10 +709,9 @@ async function deleteFormula(formulaId) {
     const formulaToDelete = formulas.find(f => f.id === formulaId);
     const confirmDeletion = await showCustomMessageBox("確認刪除", `您確定要刪除方劑「${formulaToDelete ? formulaToDelete.name : '未知方劑'}」嗎？此操作不可恢復。`, true);
     if (confirmDeletion) {
-        if (db && authReady) {
+        if (firestoreDb && authReady && currentAppId) {
             try {
-                const currentAppId = firebaseConfig.projectId;
-                await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/formulas`, formulaId));
+                await deleteDoc(doc(firestoreDb, `artifacts/${currentAppId}/public/data/formulas`, formulaId));
                 await showCustomMessageBox("成功", "方劑刪除成功！");
             } catch (e) {
                 console.error("刪除方劑失敗:", e);
