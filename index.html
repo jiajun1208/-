@@ -20,22 +20,26 @@
         <p id="user-info" class="text-center text-sm text-gray-500 mb-6"></p>
 
         <!-- 導航按鈕 -->
-        <nav class="flex flex-wrap justify-center space-x-2 md:space-x-4 mb-8">
-            <button id="show-quiz-btn" class="bg-blue-600 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-700 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-2 md:mb-0">
-                藥材組成挑戰
-            </button>
-            <button id="show-category-challenge-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-2 md:mb-0">
-                藥劑分類大挑戰
-            </button>
-            <button id="show-formula-intro-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-2 md:mb-0">
-                方劑介紹
-            </button>
-            <button id="show-mistakes-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-2 md:mb-0">
-                錯題記錄
-            </button>
-            <button id="show-manage-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-2 md:mb-0 hidden">
-                題目管理
-            </button>
+        <nav class="flex flex-col space-y-4 md:flex-row md:space-x-4 md:space-y-0 justify-center mb-8">
+            <div class="flex flex-wrap justify-center gap-2">
+                <button id="show-quiz-btn" class="bg-blue-600 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-700 transition duration-300 shadow-md transform hover:scale-105 active:scale-95">
+                    藥材組成挑戰
+                </button>
+                <button id="show-category-challenge-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95">
+                    藥劑分類大挑戰
+                </button>
+            </div>
+            <div class="flex flex-wrap justify-center gap-2">
+                <button id="show-formula-intro-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95">
+                    方劑介紹
+                </button>
+                <button id="show-mistakes-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95">
+                    錯題記錄
+                </button>
+                <button id="show-manage-btn" class="bg-white text-blue-600 border border-blue-600 px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-base md:text-lg hover:bg-blue-50 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 hidden">
+                    題目管理
+                </button>
+            </div>
         </nav>
 
         <!-- 載入指示器 -->
@@ -139,17 +143,12 @@
             <!-- 介紹卡片搜尋框 -->
             <input type="text" id="intro-search-input" placeholder="搜尋方劑名稱..." class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
 
-            <!-- 新增介紹按鈕 (在介紹區本身) -->
-            <button id="add-formula-intro-btn-top" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-green-700 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-6">
-                新增方劑介紹卡片
-            </button>
-
             <!-- 方劑介紹卡片列表 -->
             <div id="formula-introductions-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- 方劑介紹卡片將在此處動態載入 -->
             </div>
             <p id="no-introductions-message" class="text-center text-gray-500 text-lg mt-4 hidden">
-                目前沒有任何方劑介紹卡片，點擊上方按鈕新增。
+                目前沒有任何方劑介紹卡片，點擊「題目管理」新增。
             </p>
         </div>
 
@@ -187,8 +186,8 @@
                 </p>
             </div>
 
-            <!-- 藥劑分類大挑戰題目管理 (新增) -->
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-inner">
+            <!-- 藥劑分類大挑戰題目管理 -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8 shadow-inner">
                 <h3 class="text-xl font-semibold text-blue-800 mb-4">藥劑分類大挑戰題目</h3>
                 <input type="text" id="category-search-input" placeholder="搜尋藥劑分類方劑名稱..." class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <button id="add-category-challenge-btn" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-green-700 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-6">
@@ -199,6 +198,21 @@
                 </div>
                 <p id="no-managed-category-challenges-message" class="text-center text-gray-500 text-lg mt-4 hidden">
                     目前沒有任何藥劑分類題目，點擊上方按鈕新增。
+                </p>
+            </div>
+
+            <!-- 方劑介紹卡片管理 (新增) -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-inner">
+                <h3 class="text-xl font-semibold text-blue-800 mb-4">方劑介紹卡片管理</h3>
+                <input type="text" id="managed-intro-search-input" placeholder="搜尋方劑介紹卡片名稱..." class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="add-managed-formula-intro-btn" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold text-lg hover:bg-green-700 transition duration-300 shadow-md transform hover:scale-105 active:scale-95 mb-6">
+                    新增方劑介紹卡片
+                </button>
+                <div id="managed-formula-introductions-list" class="space-y-4">
+                    <!-- 方劑介紹卡片列表將在此處動態載入 -->
+                </div>
+                <p id="no-managed-introductions-message" class="text-center text-gray-500 text-lg mt-4 hidden">
+                    目前沒有任何方劑介紹卡片，點擊上方按鈕新增。
                 </p>
             </div>
         </div>
