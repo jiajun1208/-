@@ -1,7 +1,8 @@
 // Import Firebase modules (using full CDN URLs)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+// FIX: Add query and where to the import list
+import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
 // =====================================================================
 // Please paste your Firebase project configuration here!
@@ -217,7 +218,6 @@ async function initializeFirebase() {
                     listenToFormulas();
                     listenToCategoryChallenges();
                     listenToFormulaIntroductions();
-                    await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
                 }
             }
             hideLoadingSpinner();
@@ -360,7 +360,15 @@ function listenToMistakeRecords() {
     console.log(`嘗試監聽錯題記錄 (mistakeRecords) 路徑: artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
     const mistakeRecordsColRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
     onSnapshot(mistakeRecordsColRef, (snapshot) => {
-        mistakeRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Map documents to mistakeRecords, ensuring 'count' field exists
+        mistakeRecords = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                count: data.count || 1 // Default count to 1 if not defined (for older records)
+            };
+        });
         console.log("Mistake records loaded from Firestore:", mistakeRecords);
         if (mistakesSection.classList.contains('hidden')) {
             // If not on the mistake records page, no need to re-render
@@ -451,6 +459,8 @@ function loadMistakeRecordsLocal() {
     try {
         const records = localStorage.getItem('mistakeRecords');
         mistakeRecords = records ? JSON.parse(records) : [];
+        // Ensure count is initialized for older records
+        mistakeRecords = mistakeRecords.map(record => ({ ...record, count: record.count || 1 }));
     } catch (e) {
         console.error("Failed to load mistake records from localStorage:", e);
         mistakeRecords = [];
@@ -563,11 +573,13 @@ function selectWeightedRandomQuestion(questionPool, challengeType) {
         let weight = 1; // Base weight
 
         // Boost weight significantly for incorrect answers
-        weight += timesIncorrect * 3; // For example, 3x boost for each incorrect answer
+        // A higher multiplier means incorrectly answered questions are preferred more strongly.
+        weight += timesIncorrect * 5; // For example, 5x boost for each incorrect answer
 
         // Slightly decrease weight for frequently appeared questions, capped to prevent very low weights
         // Max penalty for appearing is 0.5 (e.g., 50 appearances)
-        weight -= Math.min(timesAppeared, 50) * 0.01;
+        // A higher multiplier means frequently appeared questions are penalized more strongly.
+        weight -= Math.min(timesAppeared, 50) * 0.02; // Max 1 point deduction for 50 appearances
 
         // Ensure weight does not go below a minimum (e.g., 0.1)
         weight = Math.max(0.1, weight);
@@ -642,6 +654,10 @@ function displayQuestion() {
     if (!currentFormula) {
         formulaNameElem.textContent = "沒有可用的題目";
         formulaHintElem.textContent = "無法選取題目，請檢查題庫。";
+        userAnswerInput.disabled = true; // Disable input if no question
+        submitAnswerBtn.classList.add('hidden');
+        showCorrectAnswerBtn.classList.add('hidden');
+        nextQuestionBtn.classList.add('hidden');
         return;
     }
 
@@ -734,7 +750,7 @@ async function addMistake(formulaName, correctAnswer, challengeType) {
         try {
             const mistakeCollectionRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
             // Query for existing mistake for this formula and type
-            const q = query(mistakeCollectionRef, 
+            const q = query(mistakeCollectionRef,
                 where("formulaName", "==", formulaName),
                 where("challengeType", "==", challengeType)
             );
@@ -803,7 +819,7 @@ async function removeCorrectedMistake(formulaName, challengeType) {
     if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
         try {
             const mistakeCollectionRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
-            const q = query(mistakeCollectionRef, 
+            const q = query(mistakeCollectionRef,
                 where("formulaName", "==", formulaName),
                 where("challengeType", "==", challengeType)
             );
@@ -874,6 +890,10 @@ function displayCategoryQuestion() {
     if (!currentCategoryChallenge) {
         categoryFormulaNameElem.textContent = "沒有可用的題目";
         categoryChallengeHintElem.textContent = "無法選取題目，請檢查題庫。";
+        userCategoryAnswerInput.disabled = true; // Disable input if no question
+        submitCategoryAnswerBtn.classList.add('hidden');
+        showCorrectCategoryAnswerBtn.classList.add('hidden');
+        nextCategoryQuestionBtn.classList.add('hidden');
         return;
     }
 
@@ -962,9 +982,15 @@ function renderMistakes() {
         clearMistakesBtn.classList.remove('hidden');
     }
 
-    mistakeRecords.forEach((record) => {
+    // Sort mistake records by last mistake timestamp, descending
+    const sortedMistakes = [...mistakeRecords].sort((a, b) => {
+        return new Date(b.lastMistakeTimestamp) - new Date(a.lastMistakeTimestamp);
+    });
+
+    sortedMistakes.forEach((record) => {
         const mistakeItem = document.createElement('div');
         mistakeItem.className = 'bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm relative';
+        // Display only formulaName, challengeType, and consolidated count
         mistakeItem.innerHTML = `
             <h3 class="text-xl font-semibold text-blue-800 mb-2 break-words">
                 ${record.formulaName} 
@@ -1027,9 +1053,14 @@ async function clearAllMistakes() {
         if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
             // Clear all mistakes from Firestore (iterative deletion)
             try {
-                for (const record of mistakeRecords) {
-                    await deleteDoc(doc(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`, record.id));
-                }
+                // Fetch all documents in the collection and delete them one by one
+                const q = query(collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`));
+                const querySnapshot = await getDocs(q);
+                const deletePromises = [];
+                querySnapshot.forEach((doc) => {
+                    deletePromises.push(deleteDoc(doc.ref));
+                });
+                await Promise.all(deletePromises);
                 showCustomMessageBox("完成", "所有錯題記錄已從雲端清空。");
             } catch (e) {
                 console.error("Failed to clear all Firestore mistakes:", e);
