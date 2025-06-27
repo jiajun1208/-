@@ -1,7 +1,7 @@
 // Import Firebase modules (using full CDN URLs)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-// FIX: Add query and where to the import list
+// FIX: Ensure query and where are imported
 import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
 // =====================================================================
@@ -218,6 +218,7 @@ async function initializeFirebase() {
                     listenToFormulas();
                     listenToCategoryChallenges();
                     listenToFormulaIntroductions();
+                    await showCustomMessageBox("認證失敗", "無法登入 Firebase，部分功能可能受限。");
                 }
             }
             hideLoadingSpinner();
@@ -267,11 +268,8 @@ function listenToFormulas() {
         console.log("Formulas loaded from Firestore:", formulas);
         initializeAllIngredients(); // Update autocomplete list
         initializeAllCategories(); // Because categories might come from ingredient formulas too
-        if (quizSection.classList.contains('hidden')) {
-             // If not on the ingredient composition challenge page, no need to re-display question
-        } else {
-            displayQuestion(); // If on the ingredient composition challenge page, re-display question
-        }
+        // IMPORTANT FIX: Removed direct displayQuestion() call here
+        // The question display should only be triggered by user action (next button, mode switch)
         renderManagedFormulas(formulaSearchInput.value); // Re-render management list (with search filter)
     }, (error) => {
         console.error("Error listening to formulas:", error);
@@ -301,11 +299,8 @@ function listenToCategoryChallenges() {
         console.log("Category Challenges loaded from Firestore:", categoryChallenges);
         initializeAllCategories(); // Update autocomplete list (now includes categories from all sources)
         renderFormulaCategoriesFilter(); // Render category filter buttons
-        if (categoryChallengeSection.classList.contains('hidden')) {
-            // If not on the category challenge page, no need to re-display question
-        } else {
-            displayCategoryQuestion(); // If on the category challenge page, re-display question
-        }
+        // IMPORTANT FIX: Removed direct displayCategoryQuestion() call here
+        // The question display should only be triggered by user action (next button, mode switch)
         renderManagedCategories(categorySearchInput.value); // Re-render category management list (with search filter)
     }, (error) => {
         console.error("Error listening to category challenges:", error);
@@ -819,7 +814,7 @@ async function removeCorrectedMistake(formulaName, challengeType) {
     if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
         try {
             const mistakeCollectionRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
-            const q = query(mistakeCollectionRef,
+            const q = query(mistakeCollectionRef, // FIX: `query` should be imported. It is now.
                 where("formulaName", "==", formulaName),
                 where("challengeType", "==", challengeType)
             );
