@@ -628,6 +628,7 @@ async function updateQuestionStats(collectionName, question, isCorrect) {
  * Displays a new ingredient composition question.
  */
 function displayQuestion() {
+    console.log("displayQuestion() called.");
     if (formulas.length === 0) {
         formulaNameElem.textContent = "沒有可用的題目";
         formulaHintElem.textContent = "請前往「題目管理」新增方劑。";
@@ -639,9 +640,6 @@ function displayQuestion() {
         return;
     } else {
         noFormulasMessage.classList.add('hidden');
-        userAnswerInput.disabled = false;
-        submitAnswerBtn.classList.remove('hidden');
-        showCorrectAnswerBtn.classList.remove('hidden');
     }
 
     // Select a question using weighted random selection
@@ -653,18 +651,30 @@ function displayQuestion() {
         submitAnswerBtn.classList.add('hidden');
         showCorrectAnswerBtn.classList.add('hidden');
         nextQuestionBtn.classList.add('hidden');
+        console.log("No currentFormula selected. Exiting displayQuestion.");
         return;
     }
 
-
-    // Update DOM elements to display the question
+    // Update DOM elements to display the question content first
     formulaNameElem.textContent = currentFormula.name;
     formulaHintElem.textContent = currentFormula.hint ? `提示：${currentFormula.hint}` : '';
     userAnswerInput.value = ''; // Clear user input
     feedbackMessageElem.classList.add('hidden'); // Hide feedback message
     feedbackMessageElem.textContent = '';
     nextQuestionBtn.classList.add('hidden'); // Hide "Next Question" button
-    userAnswerInput.focus(); // Auto-focus input field
+
+    // Now, reset the interactive states
+    // This order helps ensure the question content is there before input becomes active
+    userAnswerInput.disabled = false; // Enable input
+    submitAnswerBtn.classList.remove('hidden'); // Show submit button
+    showCorrectAnswerBtn.classList.remove('hidden'); // Show show correct answer button
+
+    // Use a tiny timeout for focus to potentially help with rendering race conditions
+    // This addresses the "double-click next" issue by ensuring the browser has time to render
+    setTimeout(() => {
+        userAnswerInput.focus(); // Auto-focus input field
+        console.log(`displayQuestion() finished. Current formula: ${currentFormula.name}. Input disabled: ${userAnswerInput.disabled}, Submit hidden: ${submitAnswerBtn.classList.contains('hidden')}`);
+    }, 50); // A very small delay
 }
 
 /**
@@ -865,6 +875,7 @@ async function removeCorrectedMistake(formulaName, challengeType) {
  * Displays a new formula classification question.
  */
 function displayCategoryQuestion() {
+    console.log("displayCategoryQuestion() called.");
     if (categoryChallenges.length === 0) {
         categoryFormulaNameElem.textContent = "沒有可用的題目";
         categoryChallengeHintElem.textContent = "請前往「題目管理」新增藥劑分類題目。";
@@ -876,9 +887,6 @@ function displayCategoryQuestion() {
         return;
     } else {
         noCategoryFormulasMessage.classList.add('hidden');
-        userCategoryAnswerInput.disabled = false;
-        submitCategoryAnswerBtn.classList.remove('hidden');
-        showCorrectCategoryAnswerBtn.classList.remove('hidden');
     }
 
     currentCategoryChallenge = selectWeightedRandomQuestion(categoryChallenges, '藥劑分類');
@@ -889,6 +897,7 @@ function displayCategoryQuestion() {
         submitCategoryAnswerBtn.classList.add('hidden');
         showCorrectCategoryAnswerBtn.classList.add('hidden');
         nextCategoryQuestionBtn.classList.add('hidden');
+        console.log("No currentCategoryChallenge selected. Exiting displayCategoryQuestion.");
         return;
     }
 
@@ -898,7 +907,17 @@ function displayCategoryQuestion() {
     categoryFeedbackMessageElem.classList.add('hidden');
     categoryFeedbackMessageElem.textContent = '';
     nextCategoryQuestionBtn.classList.add('hidden');
-    userCategoryAnswerInput.focus();
+
+    userCategoryAnswerInput.disabled = false;
+    submitCategoryAnswerBtn.classList.remove('hidden');
+    showCorrectCategoryAnswerBtn.classList.remove('hidden');
+
+    // Use a tiny timeout for focus to potentially help with rendering race conditions
+    // This addresses the "double-click next" issue by ensuring the browser has time to render
+    setTimeout(() => {
+        userCategoryAnswerInput.focus();
+        console.log(`displayCategoryQuestion() finished. Current formula: ${currentCategoryChallenge.name}. Input disabled: ${userCategoryAnswerInput.disabled}, Submit hidden: ${submitCategoryAnswerBtn.classList.contains('hidden')}`);
+    }, 50); // A very small delay
 }
 
 /**
@@ -1486,7 +1505,7 @@ function renderFormulaIntroductions(categoryFilter = '全部', searchText = '') 
             <p class="text-sm font-semibold text-gray-600 mb-3">${intro.category ? `分類：${intro.category}` : ''}</p>
             ${intro.ingredients ? `<p class="text-gray-700 text-sm mb-2 break-words"><strong>藥材：</strong> ${intro.ingredients}</p>` : ''}
             <p class="text-gray-800 mb-2 break-words"><strong>主治：</strong> ${intro.indications || '無'}</p>
-            <p class="text-gray-800 break-words"><strong>效果：</strong> ${intro.effects || '無'}</p>
+            <p class="text-gray-800 break-words"><strong>效果：：</strong> ${intro.effects || '無'}</p>
             <!-- Edit/delete buttons are not displayed in the intro section itself, moved to management -->
         `;
         formulaIntroductionsList.appendChild(introCard);
