@@ -1,8 +1,8 @@
 // Import Firebase modules (using full CDN URLs)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 // FIX: Ensure query and where are imported
-import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // =====================================================================
 // Please paste your Firebase project configuration here!
@@ -163,14 +163,14 @@ async function initializeFirebase() {
         userInfoElem.textContent = `匿名使用者 ID: ${userId} (無 Firebase 連線)`;
         showManageBtn.classList.add('hidden'); // Cannot manage questions without Firebase
         authReady = true;
-        formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]'); // Load local questions
-        categoryChallenges = JSON.parse(localStorage.getItem('localCategoryChallenges') || '[]'); // Load local category questions
-        formulaIntroductions = JSON.parse(localStorage.getItem('localFormulaIntroductions') || '[]'); // Load local introduction data
-        loadMistakeRecordsLocal(); // Load local mistake records
-        initializeAllCategories(); // Initialize categories even in local mode
-        initializeAllIngredients(); // Initialize ingredients even in local mode
-        showSection(quizSection); // Default to ingredient composition challenge
-        displayQuestion();
+        // Load local data immediately if Firebase is not configured
+        formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]');
+        categoryChallenges = JSON.parse(localStorage.getItem('localCategoryChallenges') || '[]');
+        formulaIntroductions = JSON.parse(localStorage.getItem('localFormulaIntroductions') || '[]');
+        loadMistakeRecordsLocal();
+        initializeAllCategories();
+        initializeAllIngredients();
+        // Do NOT call displayQuestion() here. It will be called when the user clicks the challenge button.
         renderFormulaCategoriesFilter(); // Render category filter buttons
         renderFormulaIntroductions(); // Render introduction cards
         return;
@@ -222,9 +222,7 @@ async function initializeFirebase() {
                 }
             }
             hideLoadingSpinner();
-            // Ensure initial page is displayed after auth is ready
-            showSection(quizSection); // Default to ingredient composition challenge
-            displayQuestion();
+            // Do NOT call displayQuestion() here. It will be called when the user clicks the challenge button.
         });
     } catch (error) {
         // Catch initialization errors
@@ -239,14 +237,14 @@ async function initializeFirebase() {
         userInfoElem.textContent = `匿名使用者 ID: ${userId} (無 Firebase 連線)`;
         showManageBtn.classList.add('hidden');
         authReady = true;
+        // Load local data immediately if Firebase initialization fails
         formulas = JSON.parse(localStorage.getItem('localFormulas') || '[]');
         categoryChallenges = JSON.parse(localStorage.getItem('localCategoryChallenges') || '[]');
         formulaIntroductions = JSON.parse(localStorage.getItem('localFormulaIntroductions') || '[]');
         loadMistakeRecordsLocal();
         initializeAllCategories();
         initializeAllIngredients();
-        showSection(quizSection);
-        displayQuestion();
+        // Do NOT call displayQuestion() here. It will be called when the user clicks the challenge button.
         renderFormulaCategoriesFilter();
         renderFormulaIntroductions();
     }
@@ -268,8 +266,8 @@ function listenToFormulas() {
         console.log("Formulas loaded from Firestore:", formulas);
         initializeAllIngredients(); // Update autocomplete list
         initializeAllCategories(); // Because categories might come from ingredient formulas too
-        // IMPORTANT FIX: Removed direct displayQuestion() call here
-        // The question display should only be triggered by user action (next button, mode switch)
+        // IMPORTANT: Removed direct displayQuestion() call here.
+        // Question display is now triggered by explicit button clicks (showQuizBtn).
         renderManagedFormulas(formulaSearchInput.value); // Re-render management list (with search filter)
     }, (error) => {
         console.error("Error listening to formulas:", error);
@@ -299,8 +297,8 @@ function listenToCategoryChallenges() {
         console.log("Category Challenges loaded from Firestore:", categoryChallenges);
         initializeAllCategories(); // Update autocomplete list (now includes categories from all sources)
         renderFormulaCategoriesFilter(); // Render category filter buttons
-        // IMPORTANT FIX: Removed direct displayCategoryQuestion() call here
-        // The question display should only be triggered by user action (next button, mode switch)
+        // IMPORTANT: Removed direct displayCategoryQuestion() call here.
+        // Question display is now triggered by explicit button clicks (showCategoryChallengeBtn).
         renderManagedCategories(categorySearchInput.value); // Re-render category management list (with search filter)
     }, (error) => {
         console.error("Error listening to category challenges:", error);
@@ -565,18 +563,18 @@ function selectWeightedRandomQuestion(questionPool, challengeType) {
         const timesIncorrect = q.timesIncorrect || 0;
         const timesAppeared = q.timesAppeared || 0;
 
-        let weight = 1; // Base weight
+        let weight = 1; // Base weight for all questions
 
-        // Boost weight significantly for incorrect answers
-        // A higher multiplier means incorrectly answered questions are preferred more strongly.
-        weight += timesIncorrect * 5; // For example, 5x boost for each incorrect answer
+        // **權重提升機制：** 回答錯誤的題目，其被選中的機率會大幅提升。
+        // 每答錯一次，權重增加5點。這確保了錯題會被優先練習。
+        weight += timesIncorrect * 5;
 
-        // Slightly decrease weight for frequently appeared questions, capped to prevent very low weights
-        // Max penalty for appearing is 0.5 (e.g., 50 appearances)
-        // A higher multiplier means frequently appeared questions are penalized more strongly.
-        weight -= Math.min(timesAppeared, 50) * 0.02; // Max 1 point deduction for 50 appearances
+        // **權重降低機制：** 出現次數明顯更多的題目，其被選中的機率會降低。
+        // 每出現一次，權重減少0.02點。為了避免權重降得太低，最多計算50次出現的影響。
+        // 這樣可以避免某些題目被過度頻繁地選中，尤其是那些總是答對的題目。
+        weight -= Math.min(timesAppeared, 50) * 0.02;
 
-        // Ensure weight does not go below a minimum (e.g., 0.1)
+        // 確保權重不會低於最小值，避免某些題目永遠不會再出現。
         weight = Math.max(0.1, weight);
 
         totalWeight += weight;
@@ -591,7 +589,7 @@ function selectWeightedRandomQuestion(questionPool, challengeType) {
             return weightedQuestions[i].question;
         }
     }
-    // Fallback in case floating point precision causes issues, pick the last one
+    // Fallback in case floating point precision issues, pick the last one
     return weightedQuestions[weightedQuestions.length - 1].question;
 }
 
@@ -824,7 +822,7 @@ async function removeCorrectedMistake(formulaName, challengeType) {
     if (firestoreDb && userId !== 'anonymous' && authReady && currentAppId) {
         try {
             const mistakeCollectionRef = collection(firestoreDb, `artifacts/${currentAppId}/users/${userId}/mistakeRecords`);
-            const q = query(mistakeCollectionRef, // FIX: `query` should be imported. It is now.
+            const q = query(mistakeCollectionRef,
                 where("formulaName", "==", formulaName),
                 where("challengeType", "==", challengeType)
             );
@@ -1821,6 +1819,8 @@ function showCategoryAutocompleteSuggestions(inputElement, resultsContainer, inp
 document.addEventListener('DOMContentLoaded', () => {
     showLoadingSpinner();
     initializeFirebase(); // Start Firebase initialization and authentication
+    // IMPORTANT: Removed direct displayQuestion() call here.
+    // The initial question will be displayed when the user clicks the challenge button.
 });
 
 showQuizBtn.addEventListener('click', () => {
